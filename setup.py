@@ -12,7 +12,7 @@ DESCRIPTION = "A Backend focused Python Web-Framework built for learning purpose
 EMAIL = "rk.rifat1203@gmail.com" 
 AUTHOR = "Khan Muhammad Rifat" 
 REQUIRES_PYTHON = ">=3.6.0"
-VERSION = "0.1.3"
+VERSION = "0.0.4"
 
 # Framework dependencies
 REQUIRED = [
