@@ -2,6 +2,7 @@ import sqlite3
 from typing import TypeVar
 
 from roob.orm.sql_types import SQL_TYPE_MAP, SQLType
+from roob.orm.exceptions import RecordNotFound
 
 
 class Column:
@@ -135,7 +136,42 @@ class Table(metaclass=TableMeta):
         sql = SELECT_BY_ID_SQL.format(name=table_name, fields=", ".join(fields))
         return sql, fields, params
 
+    def _get_update_sql(self):
+        # UPDATE author SET name = ?, age = ? WHERE id = ?;
+        UPDATE_SQL_TEMPLATE = "UPDATE {name} SET {fields} WHERE id = ?;"
+        table_name = self.__class__.__name__.lower()
+        fields = []
+        values = []
 
+        for field_name, field in self._columns.items():
+            if isinstance(field, PrimaryKey):
+                continue
+
+            if isinstance(field, ForeignKey):
+                fields.append(field_name + "_id = ?")
+                fk_instance: T = getattr(self, field_name)
+                values.append(fk_instance.id)
+            elif isinstance(field, Column):
+                fields.append(field_name + " = ?")
+                field_value = getattr(self, field_name)
+                values.append(field_value)
+
+        values.append(getattr(self, 'id'))
+
+        sql = UPDATE_SQL_TEMPLATE.format(
+            name=table_name,
+            fields=", ".join(fields),
+        )
+        return sql, fields, values
+
+    @classmethod
+    def _get_delete_sql(cls, id: int):
+        # DELETE FROM author WHERE id = 1;
+        DELETE_SQL_TEMPLATE = "DELETE FROM {name} WHERE id = ?;"
+        table_name = cls.__name__.lower()
+        params = [id]
+        sql = DELETE_SQL_TEMPLATE.format(name=table_name)
+        return sql, params
 
 class ForeignKey(Column):
     
@@ -182,13 +218,23 @@ class Database:
         sql, column_names, params = table_type._get_select_by_id_sql(id)
         row = self.connection.execute(sql, params).fetchone()
         if not row:
-            raise Exception(f"Table {table_type.__name__} with id {id} not found")
+            raise RecordNotFound(f"Table {table_type.__name__.lower()} with id {id} not found")
 
         return self._to_instance(
             table_type=table_type,
             column_names=column_names,
             row=row,
         )
+    
+    def update(self, table_to_update: T) -> None:
+        update_sql, column_names, params = table_to_update._get_update_sql()
+        self.connection.execute(update_sql, params)
+        self.connection.commit()
+
+    def delete(self, table_type: type[T], id: int) -> None:
+        delete_sql, params = table_type._get_delete_sql(id)
+        self.connection.execute(delete_sql, params)
+        self.connection.commit()
 
     def _to_instance(self, table_type: type[T], column_names: list[str], row: tuple) -> T:
         kwargs = {}

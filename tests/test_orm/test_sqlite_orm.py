@@ -1,6 +1,8 @@
 import os
 import sqlite3
+import pytest
 
+from roob.orm.exceptions import RecordNotFound
 from roob.orm.sqlite_orm import Database
 from tests.test_orm.conftest import Author, Book
 from roob.utils.json_util import JSONUtils
@@ -113,3 +115,94 @@ class TestSqliteORMRead:
         book_data: dict = JSONUtils.to_dict(book)
 
         assert book_data == book_fetched_data
+
+class TestSqliteORMUpdate:
+    def setup_method(self):
+        self.db = Database("./test.db")
+        self.db.create(Author)
+        self.db.create(Book)
+
+    def teardown_method(self):
+        os.remove("./test.db")
+
+    def test_update_sql(self):
+        author = Author(name="Garry C.", age=45)
+        self.db.save(author)
+
+        book = Book(title="The house of dragon", published=True, author=author)
+        self.db.save(book)
+
+        autor_to_update: Author = self.db.get_by_id(Author, author.id)
+        autor_to_update.name = "Garry C. Mertin"
+        autor_to_update.age = 50
+        update_sql, column_names, params = autor_to_update._get_update_sql()
+        assert update_sql == "UPDATE author SET name = ?, age = ? WHERE id = ?;"
+        assert column_names == ["name = ?", "age = ?"]
+        assert params == ["Garry C. Mertin", 50, autor_to_update.id]
+
+        book_to_update: Book = self.db.get_by_id(Book, book.id)
+        update_sql, column_names, params = book_to_update._get_update_sql()
+        assert update_sql == "UPDATE book SET title = ?, published = ?, author_id = ? WHERE id = ?;"
+        assert column_names == ["title = ?", "published = ?", "author_id = ?"]
+
+    def test_update_author(self):
+        author = Author(name="Garry C.", age=45)
+        self.db.save(author)
+
+        autor_to_update: Author = self.db.get_by_id(Author, author.id)
+        autor_to_update.name = "Garry C. Mertin"
+        autor_to_update.age = 50
+        self.db.update(autor_to_update)
+
+        updated_author_fetched: Author = self.db.get_by_id(Author, author.id)
+        assert JSONUtils.to_dict(updated_author_fetched) == JSONUtils.to_dict(autor_to_update)
+
+    def test_update_book(self):
+        author = Author(name="Garry C.", age=45)
+        self.db.save(author)
+
+        author_2 = Author(name="Robert C Martin", age=60)
+        self.db.save(author_2)
+
+        book = Book(title="The house of dragon", published=True, author=author)
+        self.db.save(book)
+
+        book_to_update: Book = self.db.get_by_id(Book, book.id)
+        book_to_update.title = "Teach Yourself C"
+        book_to_update.author = author_2
+        self.db.update(book_to_update)
+
+        updated_book_fetched: Book = self.db.get_by_id(Book, book.id)
+        assert updated_book_fetched.title == "Teach Yourself C"
+        assert updated_book_fetched.author.name == "Robert C Martin"
+        assert JSONUtils.to_dict(updated_book_fetched.author) == JSONUtils.to_dict(author_2)
+        assert JSONUtils.to_dict(updated_book_fetched) == JSONUtils.to_dict(book_to_update)
+
+class TestSqliteORMDelete:
+    def setup_method(self):
+        self.db = Database("./test.db")
+        self.db.create(Author)
+        self.db.create(Book)
+
+    def teardown_method(self):
+        os.remove("./test.db")
+
+    def test_delete_sql(self):
+        author = Author(name="Garry C.", age=45)
+        self.db.save(author)
+
+        sql, params = Author._get_delete_sql(author.id)
+        assert sql == "DELETE FROM author WHERE id = ?;"
+        assert params == [author.id]
+
+    def test_delete_author(self):
+        author = Author(name="Garry C.", age=45)
+        self.db.save(author)
+
+        self.db.delete(Author, author.id)
+
+        with pytest.raises(
+            RecordNotFound,
+            match=f"Table author with id {author.id} not found"
+        ):
+            self.db.get_by_id(Author, author.id)
