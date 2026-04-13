@@ -1,6 +1,8 @@
 import pytest
 from pathlib import Path
 
+from roob.orm.column import PrimaryKey, Column, ForeignKey
+from roob.orm.table import Table
 from roob.common_handlers import CommonHandlers
 from tests.utils.test_framework import TestFramework
 from tests.utils.temp_file_builder import TempFileBuilder

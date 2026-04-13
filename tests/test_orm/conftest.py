@@ -1,4 +1,5 @@
-from roob.orm.sqlite_orm import Table, PrimaryKey, Column, ForeignKey
+from roob.orm.table import Table
+from roob.orm.column import PrimaryKey, Column, ForeignKey
 
 
 class Author(Table):
